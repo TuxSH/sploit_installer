@@ -946,49 +946,33 @@ int main()
 				break;
 			case STATE_DOWNLOAD_PAYLOAD:
 				{
-					httpcContext context;
-					static char in_url[512];
-					static char out_url[512];
-					static char tmpstr[256];
+					FILE *payload_file;
+					struct stat payload_stat;
 
-					memset(in_url, 0, sizeof(in_url));
-					memset(out_url, 0, sizeof(out_url));
-					memset(tmpstr, 0, sizeof(tmpstr));
-
-					snprintf(in_url, sizeof(in_url)-1, "http://smea.mtheall.com/get_payload.php?version=%s-%d-%d-%d-%d-%s", firmware_version[0]?"NEW":"OLD", firmware_version[1], firmware_version[2], firmware_version[3], firmware_version[4], regionids_table[firmware_version[5]]);
-
-					if(!sysinfo_overridden && allow_use_menuver)//Send the actual Home Menu title-version in the request URL, when the user didn't override the system-info. This is needed for when the title-version is different from what it should be with the current CVer. With this the server script will determine the Home Menu portion of the output URL using the input menuver instead of the system-version.
+					payload_file = fopen("sdmc:/otherapp.bin", "rb");
+					if (payload_file == NULL)
 					{
-						snprintf(tmpstr, sizeof(tmpstr)-1, "&menuver=%u", menu_title_entry.version);
-						strncat(in_url, tmpstr, sizeof(in_url)-1);
-					}
-
-					memset(useragent, 0, sizeof(useragent));
-					snprintf(useragent, sizeof(useragent)-1, "sploit_installer-%s", exploitname);
-
-					Result ret = http_getredirection(in_url, out_url, 512, useragent);
-					if(ret)
-					{
-						sprintf(status, "Failed to grab payload url\n    Error code : %08X", (unsigned int)ret);
+						sprintf(status, "Failed to open payload\n");
 						next_state = STATE_ERROR;
 						break;
 					}
 
-					ret = httpcOpenContext(&context, HTTPC_METHOD_GET, out_url, 0);
-					if(ret)
+					if (fstat(fileno(payload_file), &payload_stat) == -1)
 					{
-						sprintf(status, "Failed to open http context\n    Error code : %08X", (unsigned int)ret);
+						sprintf(status, "Failed to stat payload\n");
 						next_state = STATE_ERROR;
 						break;
 					}
 
-					ret = http_download(&context, &payload_buf, &payload_size, useragent);
-					if(ret)
+					payload_size = payload_stat.st_size;
+					if (fread(payload_buf, 1, payload_size, payload_file) != payload_size)
 					{
-						sprintf(status, "Failed to download payload\n    Error code : %08X", (unsigned int)ret);
+						sprintf(status, "Failed to read payload\n");
 						next_state = STATE_ERROR;
 						break;
 					}
+
+					fclose(payload_file);
 
 					if(flags_bitmask & 0x1)
 					{
